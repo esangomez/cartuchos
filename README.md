@@ -2,7 +2,7 @@
 
 Página con emulador de Game Boy Advance (EmulatorJS) para abrir juegos acercando un llavero NFC al celular.
 
-**Las ROMs no se suben a este repositorio.** Cada celular guarda su propia copia en el navegador la primera vez que se abre cada juego. No agregues archivos `.gba` al repo: GitHub Pages es público.
+**Los juegos comerciales (como FireRed) no se suben a este repositorio.** Cada celular guarda su propia copia en el navegador la primera vez que se abre el juego. Al repo, en `roms/`, solo van juegos con licencia libre (ver más abajo): GitHub Pages es público.
 
 ## Publicarla en GitHub Pages
 
@@ -16,6 +16,17 @@ Página con emulador de Game Boy Advance (EmulatorJS) para abrir juegos acercand
 `https://esangomez.github.io/cartuchos/?juego=firered`
 
 La página también muestra el link con un botón para copiarlo.
+
+## Juegos libres desde la carpeta `roms/`
+
+Los juegos con licencia que permite redistribuirlos se pueden subir al repo y abren directo, sin pedir el archivo:
+
+1. Subí el archivo a `roms/` (en GitHub: *Add file → Upload files* y escribí `roms/` delante del nombre). Acepta `.gba`, `.gb` y `.gbc`.
+2. Usá un nombre simple, sin espacios ni tildes: por ejemplo `roms/mi-juego.gba`.
+3. Subí también su licencia, por ejemplo `roms/mi-juego-LICENSE.txt`.
+4. El link para el NFC es el nombre del archivo sin la extensión: `https://esangomez.github.io/cartuchos/?juego=mi-juego`
+
+En la página de inicio aparece solo, con su botón para copiar el link. **No subas a `roms/` juegos comerciales**: todo lo que esté en el repo es público.
 
 ## Grabar el NFC
 

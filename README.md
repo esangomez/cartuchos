@@ -1,8 +1,8 @@
 # Cartuchos NFC
 
-Página con emulador de Game Boy / Game Boy Color (EmulatorJS) para abrir juegos acercando un llavero NFC al celular.
+Página con emulador de Game Boy Advance (EmulatorJS) para abrir juegos acercando un llavero NFC al celular.
 
-**Las ROMs no se suben a este repositorio.** Cada celular guarda su propia copia en el navegador la primera vez que se abre cada juego. No agregues archivos `.gb` o `.gbc` al repo: GitHub Pages es público.
+**Las ROMs no se suben a este repositorio.** Cada celular guarda su propia copia en el navegador la primera vez que se abre cada juego. No agregues archivos `.gba` al repo: GitHub Pages es público.
 
 ## Publicarla en GitHub Pages
 
@@ -11,16 +11,11 @@ Página con emulador de Game Boy / Game Boy Color (EmulatorJS) para abrir juegos
 3. Andá a **Settings → Pages**, en *Source* elegí **Deploy from a branch**, rama `main`, carpeta `/ (root)` y guardá.
 4. En uno o dos minutos la página queda en `https://esangomez.github.io/cartuchos/`.
 
-## Links para grabar en los NFC
+## Link para grabar en el NFC
 
-| Juego  | Link |
-|--------|------|
-| Red    | `https://esangomez.github.io/cartuchos/?juego=red` |
-| Blue   | `https://esangomez.github.io/cartuchos/?juego=blue` |
-| Green  | `https://esangomez.github.io/cartuchos/?juego=green` |
-| Yellow | `https://esangomez.github.io/cartuchos/?juego=yellow` |
+`https://esangomez.github.io/cartuchos/?juego=firered`
 
-(Si usás otro nombre de repo, cambiá `cartuchos` por ese nombre. La página también muestra cada link con un botón para copiarlo.)
+La página también muestra el link con un botón para copiarlo.
 
 ## Grabar el NFC
 

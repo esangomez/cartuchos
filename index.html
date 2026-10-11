@@ -42,14 +42,14 @@
 </head>
 <body>
 
-<!-- Inicio: los cuatro cartuchos -->
+<!-- Inicio: lista de cartuchos -->
 <main id="inicio" hidden>
   <h1>Cartuchos NFC</h1>
-  <p class="sub">El juego se guarda solo en este celular. Grabá el link de la tarjeta en el NFC del llavero.</p>
+  <p class="sub">Grabá el link de cada tarjeta en el NFC de su llavero.</p>
   <div class="grid" id="grid"></div>
   <p class="nota">
-    Las ROMs no se suben a internet: quedan en el almacenamiento de este navegador, igual que las partidas guardadas.
-    Si borrás los datos del navegador, hay que volver a cargarlas. En otro celular, la primera vez que acerques el llavero te va a pedir el archivo.
+    Los juegos que cargás desde el celular no se suben a internet: quedan en este navegador, igual que las partidas guardadas.
+    Si borrás los datos del navegador, hay que volver a cargarlos. Los juegos de la carpeta roms/ del repo abren directo en cualquier celular.
   </p>
 </main>
 
@@ -75,6 +75,35 @@ const JUEGOS = {
   firered: { nombre: 'Pokémon FireRed', color: 'var(--red)', core: 'gba', titulo: 'POKEMON FIRE' },
 };
 const EJS_DATA = 'https://cdn.emulatorjs.org/stable/data/';
+
+/* Juegos del repo: cualquier .gba / .gb / .gbc que subas a la carpeta roms/
+   aparece solo y se abre con ?juego=<nombre del archivo sin extensión>. */
+const REPO = 'esangomez/cartuchos';
+const EXT_CORE = { gba: 'gba', gbc: 'gb', gb: 'gb' };
+const idValido = id => /^[a-z0-9_-]+$/i.test(id || '');
+const nombreLindo = id => id.replace(/[-_]+/g, ' ').replace(/\b\w/g, c => c.toUpperCase());
+
+async function buscarEnRepo(id){
+  for (const ext of Object.keys(EXT_CORE)){
+    const url = `roms/${id}.${ext}`;
+    try {
+      const r = await fetch(url, { method: 'HEAD', cache: 'no-store' });
+      if (r.ok) return { url, core: EXT_CORE[ext] };
+    } catch(e){}
+  }
+  return null;
+}
+async function listarRepo(){
+  try {
+    const r = await fetch(`https://api.github.com/repos/${REPO}/contents/roms`);
+    if (!r.ok) return [];
+    const items = await r.json();
+    return items
+      .filter(i => i.type === 'file')
+      .map(i => { const m = i.name.match(/^(.+)\.(gba|gbc|gb)$/i); return m && idValido(m[1]) ? m[1] : null; })
+      .filter(Boolean);
+  } catch(e){ return []; }
+}
 
 /* ---------- Almacenamiento local (IndexedDB) ---------- */
 function abrirDB(){
@@ -170,6 +199,29 @@ async function vistaInicio(){
     });
     grid.appendChild(card);
   }
+  for (const id of await listarRepo()){
+    if (JUEGOS[id]) continue;
+    const card = document.createElement('div');
+    card.className = 'card';
+    card.style.setProperty('--c', '#8b7ff0');
+    card.innerHTML = `
+      <h2>${nombreLindo(id)}</h2>
+      <div class="estado ok">✓ Desde el repo (roms/), no hace falta cargarlo</div>
+      <div class="acciones">
+        <button class="prim" data-a="jugar">Jugar</button>
+        <button data-a="link">Copiar link NFC</button>
+      </div>
+      <div class="url">${urlJuego(id)}</div>`;
+    card.addEventListener('click', async e => {
+      const a = e.target.dataset?.a; if (!a) return;
+      if (a === 'jugar') location.href = urlJuego(id);
+      if (a === 'link'){
+        try { await navigator.clipboard.writeText(urlJuego(id)); e.target.textContent = '¡Copiado!'; }
+        catch { prompt('Copiá este link:', urlJuego(id)); }
+      }
+    });
+    grid.appendChild(card);
+  }
 }
 
 function vistaPedir(id){
@@ -185,13 +237,21 @@ function vistaPedir(id){
   };
 }
 
-function vistaJuego(id, rom){
+function vistaNoEncontrado(id){
+  const sec = document.getElementById('pedir');
+  sec.style.setProperty('--c', '#f0b35a');
+  document.getElementById('pedirTitulo').textContent = 'Juego no encontrado';
+  sec.querySelector('.sub').textContent = `No hay ningún juego "${id}" en la carpeta roms/ del repo. Revisá que el nombre del archivo coincida con el link del NFC.`;
+  document.getElementById('pedirBtn').hidden = true;
+  sec.hidden = false;
+}
+
+function vistaJuego(id, core, gameUrl){
   document.getElementById('juego').hidden = false;
-  const blob = new Blob([rom.datos], { type:'application/octet-stream' });
   window.EJS_player     = '#game';
-  window.EJS_core       = JUEGOS[id].core;
+  window.EJS_core       = core;
   window.EJS_gameName   = 'cartucho-' + id;   // nombre fijo: así las partidas se guardan siempre en el mismo lugar
-  window.EJS_gameUrl    = URL.createObjectURL(blob);
+  window.EJS_gameUrl    = gameUrl;
   window.EJS_pathtodata = EJS_DATA;
   window.EJS_startOnLoaded = true;
   window.EJS_language   = 'es-ES';
@@ -203,10 +263,17 @@ function vistaJuego(id, rom){
 /* ---------- Arranque ---------- */
 (async () => {
   const id = new URLSearchParams(location.search).get('juego');
-  if (!id || !JUEGOS[id]) return vistaInicio();
-  let rom = null;
-  try { rom = await leerRom(id); } catch(e){}
-  if (rom) vistaJuego(id, rom); else vistaPedir(id);
+  if (!idValido(id)) return vistaInicio();
+  if (JUEGOS[id]){
+    let rom = null;
+    try { rom = await leerRom(id); } catch(e){}
+    if (rom) vistaJuego(id, JUEGOS[id].core, URL.createObjectURL(new Blob([rom.datos], { type:'application/octet-stream' })));
+    else vistaPedir(id);
+    return;
+  }
+  const delRepo = await buscarEnRepo(id);
+  if (delRepo) return vistaJuego(id, delRepo.core, delRepo.url);
+  vistaNoEncontrado(id);
 })();
 </script>
 </body>

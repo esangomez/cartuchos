@@ -64,7 +64,7 @@
 
 <!-- Emulador -->
 <section id="juego" hidden>
-  <a id="volver" class="btn" href="./">✕ Salir</a>
+  <a id="volver" class="btn" href="#">✕ Salir</a>
   <div id="game"></div>
 </section>
 
@@ -259,6 +259,15 @@ function vistaJuego(id, core, gameUrl){
   s.src = EJS_DATA + 'loader.js';
   document.body.appendChild(s);
 }
+
+/* ---------- Salir del juego ---------- */
+// Intenta cerrar la pestaña. Chrome solo lo permite en algunos casos;
+// si no se cierra, la deja en blanco (sin volver a la página de inicio).
+document.getElementById('volver').addEventListener('click', e => {
+  e.preventDefault();
+  try { window.close(); } catch(err){}
+  setTimeout(() => location.replace('about:blank'), 250);
+});
 
 /* ---------- Arranque ---------- */
 (async () => {

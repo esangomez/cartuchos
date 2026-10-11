@@ -45,7 +45,7 @@
 <!-- Inicio: los cuatro cartuchos -->
 <main id="inicio" hidden>
   <h1>Cartuchos NFC</h1>
-  <p class="sub">Cada juego se guarda solo en este celular. Grabá el link de cada tarjeta en el NFC de su llavero.</p>
+  <p class="sub">El juego se guarda solo en este celular. Grabá el link de la tarjeta en el NFC del llavero.</p>
   <div class="grid" id="grid"></div>
   <p class="nota">
     Las ROMs no se suben a internet: quedan en el almacenamiento de este navegador, igual que las partidas guardadas.
@@ -56,7 +56,7 @@
 <!-- Primera vez que se abre un juego en este celular -->
 <section id="pedir" class="pedir" hidden>
   <h1 id="pedirTitulo"></h1>
-  <p class="sub">Este juego todavía no está cargado en este celular. Elegí el archivo de tu cartucho (.gb o .gbc) una sola vez y queda guardado.</p>
+  <p class="sub">Este juego todavía no está cargado en este celular. Elegí el archivo de tu cartucho (.gba) una sola vez y queda guardado.</p>
   <button class="prim" id="pedirBtn">Elegir archivo</button>
   <div class="aviso" id="pedirAviso"></div>
   <p><a class="btn" href="./">Ver todos los juegos</a></p>
@@ -68,14 +68,11 @@
   <div id="game"></div>
 </section>
 
-<input type="file" id="archivo" accept=".gb,.gbc,application/octet-stream" hidden>
+<input type="file" id="archivo" accept=".gba,application/octet-stream" hidden>
 
 <script>
 const JUEGOS = {
-  red:    { nombre: 'Pokémon Red',    color: 'var(--red)',    titulo: 'POKEMON RED' },
-  blue:   { nombre: 'Pokémon Blue',   color: 'var(--blue)',   titulo: 'POKEMON BLUE' },
-  green:  { nombre: 'Pokémon Green',  color: 'var(--green)',  titulo: 'POKEMON GREEN' },
-  yellow: { nombre: 'Pokémon Yellow', color: 'var(--yellow)', titulo: 'POKEMON YELLOW' },
+  firered: { nombre: 'Pokémon FireRed', color: 'var(--red)', core: 'gba', titulo: 'POKEMON FIRE' },
 };
 const EJS_DATA = 'https://cdn.emulatorjs.org/stable/data/';
 
@@ -103,8 +100,8 @@ const borrarRom = id => tx('readwrite', s => s.delete(id));
 
 /* ---------- Utilidades ---------- */
 function tituloCabecera(buf){
-  // El título del cartucho está en 0x134–0x143
-  const b = new Uint8Array(buf, 0x134, 16);
+  // Título del cartucho de GBA: 12 bytes desde 0xA0
+  const b = new Uint8Array(buf, 0xA0, 12);
   let s = '';
   for (const c of b){ if (c === 0) break; if (c >= 32 && c < 127) s += String.fromCharCode(c); }
   return s.trim();
@@ -126,7 +123,7 @@ async function cargarArchivo(id){
   const f = await elegirArchivo();
   if (!f) return { ok:false };
   const buf = await f.arrayBuffer();
-  if (buf.byteLength < 0x150) return { ok:false, msg:'El archivo no parece una ROM de Game Boy.' };
+  if (buf.byteLength < 0xC0) return { ok:false, msg:'El archivo no parece una ROM de Game Boy Advance.' };
   const t = tituloCabecera(buf);
   const esperado = JUEGOS[id].titulo;
   if (t && !t.startsWith(esperado) &&
@@ -192,8 +189,8 @@ function vistaJuego(id, rom){
   document.getElementById('juego').hidden = false;
   const blob = new Blob([rom.datos], { type:'application/octet-stream' });
   window.EJS_player     = '#game';
-  window.EJS_core       = 'gb';
-  window.EJS_gameName   = 'pokemon-' + id;   // nombre fijo: así las partidas se guardan siempre en el mismo lugar
+  window.EJS_core       = JUEGOS[id].core;
+  window.EJS_gameName   = 'cartucho-' + id;   // nombre fijo: así las partidas se guardan siempre en el mismo lugar
   window.EJS_gameUrl    = URL.createObjectURL(blob);
   window.EJS_pathtodata = EJS_DATA;
   window.EJS_startOnLoaded = true;

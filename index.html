@@ -1,0 +1,216 @@
+<!doctype html>
+<html lang="es-AR">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<meta name="theme-color" content="#1b1d24">
+<title>Cartuchos NFC</title>
+<style>
+  :root{
+    --bg:#1b1d24; --panel:#252833; --text:#f1f2f6; --muted:#a3a8b8; --line:#353948;
+    --red:#e2483d; --blue:#3b6fd8; --green:#3fa45b; --yellow:#e8b51e;
+  }
+  *{box-sizing:border-box}
+  html,body{margin:0;background:var(--bg);color:var(--text);font-family:system-ui,-apple-system,"Segoe UI",Roboto,sans-serif}
+  main{max-width:720px;margin:0 auto;padding:24px 16px 48px}
+  h1{font-size:1.5rem;margin:0 0 4px}
+  .sub{color:var(--muted);margin:0 0 24px;font-size:.95rem}
+  .grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(300px,1fr));gap:14px}
+  .card{background:var(--panel);border:1px solid var(--line);border-radius:14px;padding:16px;border-top:6px solid var(--c)}
+  .card h2{margin:0 0 4px;font-size:1.15rem}
+  .estado{font-size:.85rem;color:var(--muted);margin-bottom:12px}
+  .estado.ok{color:#7fd69a}
+  .acciones{display:flex;flex-wrap:wrap;gap:8px}
+  button,.btn{appearance:none;border:1px solid var(--line);background:#2f3341;color:var(--text);
+    padding:9px 12px;border-radius:9px;font-size:.9rem;cursor:pointer;text-decoration:none}
+  button.prim{background:var(--c);border-color:var(--c);color:#111;font-weight:600}
+  button:disabled{opacity:.4;cursor:default}
+  .url{margin-top:10px;font-family:ui-monospace,monospace;font-size:.75rem;color:var(--muted);word-break:break-all}
+  .nota{margin-top:28px;font-size:.85rem;color:var(--muted);line-height:1.5}
+  /* Vista de carga inicial */
+  .pedir{max-width:440px;margin:15vh auto 0;text-align:center;padding:0 16px}
+  .pedir h1{color:var(--c)}
+  .pedir button{font-size:1.05rem;padding:14px 20px;margin-top:12px}
+  .aviso{color:#f0b35a;font-size:.9rem;margin-top:12px;min-height:1.2em}
+  /* Vista de juego */
+  #juego{position:fixed;inset:0;background:#000}
+  #juego #game{width:100%;height:100%}
+  #volver{position:fixed;top:max(8px,env(safe-area-inset-top));left:8px;z-index:9999;
+    background:rgba(0,0,0,.55);border-color:rgba(255,255,255,.25);font-size:.8rem;padding:6px 10px}
+  [hidden]{display:none!important}
+</style>
+</head>
+<body>
+
+<!-- Inicio: los cuatro cartuchos -->
+<main id="inicio" hidden>
+  <h1>Cartuchos NFC</h1>
+  <p class="sub">Cada juego se guarda solo en este celular. Grabá el link de cada tarjeta en el NFC de su llavero.</p>
+  <div class="grid" id="grid"></div>
+  <p class="nota">
+    Las ROMs no se suben a internet: quedan en el almacenamiento de este navegador, igual que las partidas guardadas.
+    Si borrás los datos del navegador, hay que volver a cargarlas. En otro celular, la primera vez que acerques el llavero te va a pedir el archivo.
+  </p>
+</main>
+
+<!-- Primera vez que se abre un juego en este celular -->
+<section id="pedir" class="pedir" hidden>
+  <h1 id="pedirTitulo"></h1>
+  <p class="sub">Este juego todavía no está cargado en este celular. Elegí el archivo de tu cartucho (.gb o .gbc) una sola vez y queda guardado.</p>
+  <button class="prim" id="pedirBtn">Elegir archivo</button>
+  <div class="aviso" id="pedirAviso"></div>
+  <p><a class="btn" href="./">Ver todos los juegos</a></p>
+</section>
+
+<!-- Emulador -->
+<section id="juego" hidden>
+  <a id="volver" class="btn" href="./">✕ Salir</a>
+  <div id="game"></div>
+</section>
+
+<input type="file" id="archivo" accept=".gb,.gbc,application/octet-stream" hidden>
+
+<script>
+const JUEGOS = {
+  red:    { nombre: 'Pokémon Red',    color: 'var(--red)',    titulo: 'POKEMON RED' },
+  blue:   { nombre: 'Pokémon Blue',   color: 'var(--blue)',   titulo: 'POKEMON BLUE' },
+  green:  { nombre: 'Pokémon Green',  color: 'var(--green)',  titulo: 'POKEMON GREEN' },
+  yellow: { nombre: 'Pokémon Yellow', color: 'var(--yellow)', titulo: 'POKEMON YELLOW' },
+};
+const EJS_DATA = 'https://cdn.emulatorjs.org/stable/data/';
+
+/* ---------- Almacenamiento local (IndexedDB) ---------- */
+function abrirDB(){
+  return new Promise((ok, mal) => {
+    const r = indexedDB.open('cartuchos-nfc', 1);
+    r.onupgradeneeded = () => r.result.createObjectStore('roms');
+    r.onsuccess = () => ok(r.result);
+    r.onerror = () => mal(r.error);
+  });
+}
+async function tx(modo, fn){
+  const db = await abrirDB();
+  return new Promise((ok, mal) => {
+    const t = db.transaction('roms', modo);
+    const req = fn(t.objectStore('roms'));
+    t.oncomplete = () => ok(req && req.result);
+    t.onerror = () => mal(t.error);
+  });
+}
+const leerRom   = id => tx('readonly',  s => s.get(id));
+const guardarRom= (id, datos) => tx('readwrite', s => s.put(datos, id));
+const borrarRom = id => tx('readwrite', s => s.delete(id));
+
+/* ---------- Utilidades ---------- */
+function tituloCabecera(buf){
+  // El título del cartucho está en 0x134–0x143
+  const b = new Uint8Array(buf, 0x134, 16);
+  let s = '';
+  for (const c of b){ if (c === 0) break; if (c >= 32 && c < 127) s += String.fromCharCode(c); }
+  return s.trim();
+}
+function urlJuego(id){
+  const u = new URL(location.href);
+  u.search = '?juego=' + id; u.hash = '';
+  return u.toString();
+}
+function elegirArchivo(){
+  return new Promise(ok => {
+    const inp = document.getElementById('archivo');
+    inp.value = '';
+    inp.onchange = () => ok(inp.files[0] || null);
+    inp.click();
+  });
+}
+async function cargarArchivo(id){
+  const f = await elegirArchivo();
+  if (!f) return { ok:false };
+  const buf = await f.arrayBuffer();
+  if (buf.byteLength < 0x150) return { ok:false, msg:'El archivo no parece una ROM de Game Boy.' };
+  const t = tituloCabecera(buf);
+  const esperado = JUEGOS[id].titulo;
+  if (t && !t.startsWith(esperado) &&
+      !confirm(`El archivo dice "${t}", no "${esperado}". ¿Guardarlo igual como ${JUEGOS[id].nombre}?`)){
+    return { ok:false };
+  }
+  await guardarRom(id, { nombre: f.name, datos: buf, fecha: Date.now() });
+  try { await navigator.storage?.persist?.(); } catch(e){}
+  return { ok:true };
+}
+
+/* ---------- Vistas ---------- */
+async function vistaInicio(){
+  document.getElementById('inicio').hidden = false;
+  const grid = document.getElementById('grid');
+  grid.innerHTML = '';
+  for (const [id, j] of Object.entries(JUEGOS)){
+    let rom = null;
+    try { rom = await leerRom(id); } catch(e){}
+    const card = document.createElement('div');
+    card.className = 'card';
+    card.style.setProperty('--c', j.color);
+    card.innerHTML = `
+      <h2>${j.nombre}</h2>
+      <div class="estado ${rom ? 'ok' : ''}">${rom ? '✓ Cargado en este celular (' + rom.nombre + ')' : 'Sin cargar en este celular'}</div>
+      <div class="acciones">
+        <button class="prim" data-a="jugar" ${rom ? '' : 'disabled'}>Jugar</button>
+        <button data-a="cargar">${rom ? 'Reemplazar' : 'Cargar archivo'}</button>
+        <button data-a="link">Copiar link NFC</button>
+        ${rom ? '<button data-a="borrar">Borrar</button>' : ''}
+      </div>
+      <div class="url">${urlJuego(id)}</div>`;
+    card.addEventListener('click', async e => {
+      const a = e.target.dataset?.a; if (!a) return;
+      if (a === 'jugar') location.href = urlJuego(id);
+      if (a === 'cargar'){ const r = await cargarArchivo(id); if (r.msg) alert(r.msg); vistaInicio(); }
+      if (a === 'borrar' && confirm(`¿Borrar ${j.nombre} de este celular? Las partidas guardadas no se borran.`)){
+        await borrarRom(id); vistaInicio();
+      }
+      if (a === 'link'){
+        try { await navigator.clipboard.writeText(urlJuego(id)); e.target.textContent = '¡Copiado!'; }
+        catch { prompt('Copiá este link:', urlJuego(id)); }
+      }
+    });
+    grid.appendChild(card);
+  }
+}
+
+function vistaPedir(id){
+  const j = JUEGOS[id];
+  const sec = document.getElementById('pedir');
+  sec.style.setProperty('--c', j.color);
+  document.getElementById('pedirTitulo').textContent = j.nombre;
+  sec.hidden = false;
+  document.getElementById('pedirBtn').onclick = async () => {
+    const r = await cargarArchivo(id);
+    if (r.ok) location.reload();
+    else if (r.msg) document.getElementById('pedirAviso').textContent = r.msg;
+  };
+}
+
+function vistaJuego(id, rom){
+  document.getElementById('juego').hidden = false;
+  const blob = new Blob([rom.datos], { type:'application/octet-stream' });
+  window.EJS_player     = '#game';
+  window.EJS_core       = 'gb';
+  window.EJS_gameName   = 'pokemon-' + id;   // nombre fijo: así las partidas se guardan siempre en el mismo lugar
+  window.EJS_gameUrl    = URL.createObjectURL(blob);
+  window.EJS_pathtodata = EJS_DATA;
+  window.EJS_startOnLoaded = true;
+  window.EJS_language   = 'es-ES';
+  const s = document.createElement('script');
+  s.src = EJS_DATA + 'loader.js';
+  document.body.appendChild(s);
+}
+
+/* ---------- Arranque ---------- */
+(async () => {
+  const id = new URLSearchParams(location.search).get('juego');
+  if (!id || !JUEGOS[id]) return vistaInicio();
+  let rom = null;
+  try { rom = await leerRom(id); } catch(e){}
+  if (rom) vistaJuego(id, rom); else vistaPedir(id);
+})();
+</script>
+</body>
+</html>
